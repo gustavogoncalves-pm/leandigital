@@ -766,7 +766,9 @@ export function generateAllocation(
   );
 
   // 2. CÁLCULO JIT (BUFFER DINAMICO)
-  const bufferSeguranca = cfg.bufferSeguranca || 2; // Usa valor da config ou padrão de 2 semanas
+  // FIX: Utilizando Nullish Coalescing (??) para permitir buffer 0
+  const bufferSeguranca = cfg.bufferSeguranca ?? 2; 
+
   console.log(`🧠 [Otimizador] Calculando JIT (Buffer ${bufferSeguranca} Semanas)...`);
   const jitConstraints: Record<string, number> = {};
 
