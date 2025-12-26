@@ -1,0 +1,187 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 210 25% 20%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 25% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 25% 20%;
+
+    --primary: 205 45% 45%;
+    --primary-foreground: 43 40% 97%;
+
+    --secondary: 210 15% 96%;
+    --secondary-foreground: 210 25% 20%;
+
+    --muted: 210 10% 94%;
+    --muted-foreground: 210 15% 45%;
+
+    --accent: 205 45% 95%;
+    --accent-foreground: 205 45% 35%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 15% 90%;
+    --input: 210 15% 90%;
+    --ring: 205 45% 45%;
+
+    --radius: 0.5rem;
+
+    /* Custom phase colors - based on palette */
+    --phase-in: 205 45% 45%;
+    --phase-es: 190 50% 45%;
+    --phase-pl: 215 40% 35%;
+    --phase-de: 160 50% 40%;
+    --phase-qa: 35 85% 55%;
+    --phase-ho: 25 90% 55%;
+    --phase-im: 0 55% 60%;
+    --phase-oa: 45 35% 65%;
+    --phase-en: 210 15% 45%;
+
+    /* Gradients */
+    --gradient-header: linear-gradient(135deg, hsl(205 45% 45%) 0%, hsl(215 40% 35%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 10% 98%) 100%);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(210 25% 20% / 0.08);
+    --shadow-md: 0 4px 6px -1px hsl(210 25% 20% / 0.1), 0 2px 4px -2px hsl(210 25% 20% / 0.08);
+    --shadow-lg: 0 10px 15px -3px hsl(210 25% 20% / 0.1), 0 4px 6px -4px hsl(210 25% 20% / 0.08);
+    --shadow-glow: 0 0 20px hsl(205 45% 45% / 0.2);
+
+    --sidebar-background: 0 0% 99%;
+    --sidebar-foreground: 210 25% 25%;
+    --sidebar-primary: 205 45% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 15% 96%;
+    --sidebar-accent-foreground: 210 25% 20%;
+    --sidebar-border: 210 15% 90%;
+    --sidebar-ring: 205 45% 50%;
+  }
+
+  .dark {
+    --background: 210 30% 12%;
+    --foreground: 43 30% 92%;
+
+    --card: 210 28% 15%;
+    --card-foreground: 43 30% 92%;
+
+    --popover: 210 28% 15%;
+    --popover-foreground: 43 30% 92%;
+
+    --primary: 205 50% 55%;
+    --primary-foreground: 210 30% 12%;
+
+    --secondary: 210 25% 20%;
+    --secondary-foreground: 43 30% 92%;
+
+    --muted: 210 25% 20%;
+    --muted-foreground: 43 20% 60%;
+
+    --accent: 160 45% 45%;
+    --accent-foreground: 43 30% 92%;
+
+    --destructive: 0 55% 50%;
+    --destructive-foreground: 43 30% 92%;
+
+    --border: 210 25% 22%;
+    --input: 210 25% 22%;
+    --ring: 205 50% 55%;
+
+    --sidebar-background: 210 28% 14%;
+    --sidebar-foreground: 43 25% 85%;
+    --sidebar-primary: 205 50% 55%;
+    --sidebar-primary-foreground: 210 30% 12%;
+    --sidebar-accent: 210 25% 20%;
+    --sidebar-accent-foreground: 43 30% 92%;
+    --sidebar-border: 210 25% 22%;
+    --sidebar-ring: 205 50% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  .phase-cell {
+    @apply text-xs font-semibold text-center py-1 px-0.5 rounded transition-all duration-200;
+  }
+
+  .phase-in { background: hsl(var(--phase-in)); color: white; }
+  .phase-es { background: hsl(var(--phase-es)); color: white; }
+  .phase-pl { background: hsl(var(--phase-pl)); color: white; }
+  .phase-de { background: hsl(var(--phase-de)); color: white; }
+  .phase-qa { background: hsl(var(--phase-qa)); color: hsl(45 100% 15%); }
+  .phase-ho { background: hsl(var(--phase-ho)); color: white; }
+  .phase-im { background: hsl(var(--phase-im)); color: white; }
+  .phase-oa { background: hsl(var(--phase-oa)); color: white; }
+  .phase-en { background: hsl(var(--phase-en)); color: white; }
+  .phase-wait { background: hsl(220 14% 94%); color: hsl(220 9% 46%); }
+  .phase-blocked { background: hsl(0 84% 95%); color: hsl(0 84% 45%); }
+
+  .gantt-header {
+    background: var(--gradient-header);
+    @apply text-white;
+  }
+
+  .glass-card {
+    background: var(--gradient-card);
+    box-shadow: var(--shadow-md);
+    @apply border border-border rounded-lg;
+  }
+
+  .timeline-grid {
+    display: grid;
+    grid-template-columns: 250px repeat(var(--weeks, 52), minmax(32px, 1fr));
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
