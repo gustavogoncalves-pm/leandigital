@@ -614,9 +614,12 @@ function rodarMotorSimulacao(
           if (novoIdx >= ordemFases.length) {
             st.fim = true;
             // Registrar metadados quando projeto termina
-            const duracaoTeorica = Array.from(PHASES).reduce((sum, fase) => {
+            // FIX: Calcula duração teórica SOMENTE das fases que o projeto realmente executou
+            // Isso evita que projetos "Terceiros" tenham duração teórica inflada somando fases "Desenvolvimento"
+            const duracaoTeorica = st.ordem_fases.reduce((sum, fase) => {
               return sum + (projectDurations.get(p.id)?.[fase] || 0);
             }, 0);
+            
             metadados[p.id] = {
               termino_abs: simulacaoAbs,
               duracao_teorica: duracaoTeorica
@@ -781,9 +784,9 @@ export function generateAllocation(
     if (terminoReal === 0) continue;
     
     // JIT: Tenta começar mais tarde para acabar na mesma data
-    // Fórmula corrigida: termino_real - duracao_esforco - buffer
-    // Buffer menor = início mais tarde (mais próximo do término)
-    // Buffer maior = início mais cedo (mais conservador)
+    // Fórmula: termino_real - duracao_esforco - buffer
+    // Revertido para usar duracao_esforco (TEORICA) para garantir o efeito de "Squeeze" (empurrar o início)
+    // Se usássemos a Real (com Gaps), o início seria muito cedo (ASAP), anulando o JIT.
     let inicioTardioAbs = terminoReal - duracaoEsforco - bufferSeguranca;
     
     // Verificar se há data obrigatória do Excel que pode limitar
