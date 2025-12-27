@@ -614,12 +614,11 @@ function rodarMotorSimulacao(
           if (novoIdx >= ordemFases.length) {
             st.fim = true;
             // Registrar metadados quando projeto termina
-            // FIX: Calcula duração teórica SOMENTE das fases que o projeto realmente executou
-            // Isso evita que projetos "Terceiros" tenham duração teórica inflada somando fases "Desenvolvimento"
+            // FIX: Soma a duração teórica correta, apenas das fases ativas para este projeto
             const duracaoTeorica = st.ordem_fases.reduce((sum, fase) => {
               return sum + (projectDurations.get(p.id)?.[fase] || 0);
             }, 0);
-            
+
             metadados[p.id] = {
               termino_abs: simulacaoAbs,
               duracao_teorica: duracaoTeorica
@@ -785,8 +784,7 @@ export function generateAllocation(
     
     // JIT: Tenta começar mais tarde para acabar na mesma data
     // Fórmula: termino_real - duracao_esforco - buffer
-    // Revertido para usar duracao_esforco (TEORICA) para garantir o efeito de "Squeeze" (empurrar o início)
-    // Se usássemos a Real (com Gaps), o início seria muito cedo (ASAP), anulando o JIT.
+    // Utiliza duracao_teorica (sem gaps) para forçar o "squeeze"
     let inicioTardioAbs = terminoReal - duracaoEsforco - bufferSeguranca;
     
     // Verificar se há data obrigatória do Excel que pode limitar
@@ -796,20 +794,14 @@ export function generateAllocation(
       : 0;
     
     // IMPORTANTE: JIT calculado deve ter prioridade
-    // Só limita por absHoje se o cálculo JIT resultar em uma data no passado
-    // A data obrigatória será respeitada na simulação via Math.max(JIT, obrigatória)
-    // Mas o JIT calculado deve ser preservado mesmo se for menor que absHoje
-    // (a menos que seja realmente no passado, então usa absHoje)
     const jitCalcOriginal = inicioTardioAbs;
     if (inicioTardioAbs < absHoje) {
       // Se JIT calculado está no passado, limita para hoje
-      // Mas loga isso para debug
       console.log(`   ⚠️ JIT calculado (${inicioTardioAbs}) está no passado (hoje=${absHoje}), limitando para hoje`);
       inicioTardioAbs = absHoje;
     }
     
     // Se há data obrigatória e ela é menor que o JIT calculado, loga aviso
-    // (na simulação, Math.max garantirá que o maior valor seja usado)
     if (dataObrigProj > 0 && dataObrigProj < inicioTardioAbs) {
       console.log(`   ℹ️ Projeto tem data obrigatória (${dataObrigProj}) menor que JIT (${inicioTardioAbs}), JIT será usado`);
     } else if (dataObrigProj > 0 && dataObrigProj > inicioTardioAbs) {
