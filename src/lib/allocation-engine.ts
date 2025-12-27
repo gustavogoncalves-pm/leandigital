@@ -355,10 +355,11 @@ function rodarMotorSimulacao(
   semanaInicio: number,
   anoInicio: number,
   config: EngineConfig,
+  mapaBloqueiosPreCalculado?: BlockMap,
   constraintsInicioJIT?: Record<string, number> // Map<projectId, semanaAbsoluta>
 ): { timeline: TimelineRow[]; metadados: Record<string, ProjectMetadata> } {
   
-  const blockMap = mapearBloqueios(vacations);
+  const blockMap = mapaBloqueiosPreCalculado || mapearBloqueios(vacations);
   
   const dicSkills: Record<string, SkillType> = {};
   const dicCargos: Record<string, string> = {};
@@ -412,12 +413,9 @@ function rodarMotorSimulacao(
     const dataJIT = constraintsInicioJIT?.[p.id] || 0;
 
     // Data efetiva: Se tem JIT, usa o MÁXIMO entre JIT e obrigatória
-    // (JIT pode sugerir começar depois, mas obrigatória é sagrada se for mais restritiva)
-    // Se não tem JIT, usa apenas a obrigatória
     let dataAbsEfetiva = 0;
     if (dataJIT > 0) {
       // Tem JIT: usa o máximo (JIT pode ser mais tarde, mas obrigatória é sagrada)
-      // IMPORTANTE: Se JIT calculou um valor, ele deve ser respeitado (exceto se obrigatória for maior)
       dataAbsEfetiva = Math.max(dataJIT, dataObrig);
       // Debug: log quando há conflito entre JIT e obrigatória
       if (dataObrig > 0 && dataObrig !== dataJIT) {
@@ -614,11 +612,11 @@ function rodarMotorSimulacao(
           if (novoIdx >= ordemFases.length) {
             st.fim = true;
             // Registrar metadados quando projeto termina
-            // FIX: Soma a duração teórica correta, apenas das fases ativas para este projeto
+            // FIX: Soma apenas a duração teórica das fases que o projeto realmente possui
             const duracaoTeorica = st.ordem_fases.reduce((sum, fase) => {
               return sum + (projectDurations.get(p.id)?.[fase] || 0);
             }, 0);
-
+            
             metadados[p.id] = {
               termino_abs: simulacaoAbs,
               duracao_teorica: duracaoTeorica
@@ -698,7 +696,7 @@ function rodarMotorSimulacao(
     }
   }
 
-  // Agrupar timeline (mesma lógica da função original)
+  // Agrupar timeline
   const grouped: Record<string, TimelineRow> = {};
 
   for (const item of timeline) {
@@ -754,6 +752,9 @@ export function generateAllocation(
 
   const cfg = config || getDefaultConfig();
   const absHoje = (anoInicio * 52) + semanaInicio;
+  
+  // 0. PRE-CALCULAR BLOQUEIOS GLOBALMENTE
+  const blockMapGlobal = mapearBloqueios(vacations);
 
   // 1. SIMULAÇÃO BASE (ASAP)
   console.log("🔄 [Passo 1/2] Rodando Simulação Base (ASAP) para medir datas de término...");
@@ -764,44 +765,83 @@ export function generateAllocation(
     semanaInicio,
     anoInicio,
     cfg,
-    undefined // Sem constraints JIT na primeira passada
+    blockMapGlobal, // Passa o mapa calculado
+    undefined 
   );
 
   // 2. CÁLCULO JIT (BUFFER DINAMICO)
-  // FIX: Utilizando Nullish Coalescing (??) para permitir buffer 0
   const bufferSeguranca = cfg.bufferSeguranca ?? 2; 
 
   console.log(`🧠 [Otimizador] Calculando JIT (Buffer ${bufferSeguranca} Semanas)...`);
   const jitConstraints: Record<string, number> = {};
 
   for (const [pid, meta] of Object.entries(metaBase)) {
-    // Usa .get() para evitar crash se o projeto não tiver terminado
-    const duracaoEsforco = meta.duracao_teorica || 0;
     const terminoReal = meta.termino_abs || 0;
-    
-    // Se o projeto não terminou na Simulação 1, não tem como calcular JIT
     if (terminoReal === 0) continue;
     
-    // JIT: Tenta começar mais tarde para acabar na mesma data
-    // Fórmula: termino_real - duracao_esforco - buffer
-    // Utiliza duracao_teorica (sem gaps) para forçar o "squeeze"
-    let inicioTardioAbs = terminoReal - duracaoEsforco - bufferSeguranca;
+    const duracaoTeorica = meta.duracao_teorica || 1;
     
-    // Verificar se há data obrigatória do Excel que pode limitar
+    // 2.1 Cálculo inicial JIT
+    let inicioTardioAbs = terminoReal - duracaoTeorica - bufferSeguranca;
+    
+    // 2.2 SCAN DE BLOQUEIOS (LOOK-AHEAD)
+    // Se o cálculo matemático (inicioTardioAbs) colocar o projeto em colisão imediata com férias,
+    // devemos antecipar o início para garantir que o trabalho seja feito *antes* ou desviado.
+    
+    // Apenas verificamos os recursos ALOCADOS ao projeto
     const projeto = projects.find(p => p.id === pid);
+    const recursosDoProjeto = projeto?.recursos.map(r => normalizar(r)) || [];
+    
+    let semanasBloqueadasNoPeriodo = 0;
+    
+    // Varre as primeiras 4 semanas a partir do inicio calculado (Horizonte Curto)
+    // Se logo no início já tiver bloqueio, temos que antecipar.
+    const horizonteAnalise = 4; // Olha 1 mês pra frente
+    
+    for (let i = 0; i < horizonteAnalise; i++) {
+       const semanaAbsAtual = inicioTardioAbs + i;
+       
+       // Não precisamos verificar se passa do término real, queremos apenas saber se o "arranque" é limpo
+       // Converte semana absoluta para dados de calendário
+       const dataDaSemana = addWeeks(getISOWeekStart(anoInicio, semanaInicio), semanaAbsAtual - absHoje);
+       const anoIso = getISOWeekYear(dataDaSemana);
+       const semIso = getISOWeek(dataDaSemana);
+
+       let temBloqueioCritico = false;
+       for (const rec of recursosDoProjeto) {
+          const chave = `${rec}|${anoIso}|${semIso}`;
+          if (blockMapGlobal.has(chave)) {
+             const info = blockMapGlobal.get(chave);
+             // Bloqueios que impedem trabalho: Férias, Saída, Outra Squad
+             if (info && ['FERIAS', 'SAIDA', 'OUTRA_SQUAD'].includes(info.tipo)) {
+                temBloqueioCritico = true;
+                break;
+             }
+          }
+       }
+       
+       if (temBloqueioCritico) {
+          semanasBloqueadasNoPeriodo++;
+       }
+    }
+
+    // Se encontrou bloqueios no horizonte imediato de início, antecipa o projeto
+    // Isso evita que o Buffer 0 comece exatamente numa semana morta
+    if (semanasBloqueadasNoPeriodo > 0) {
+       console.log(`   🛡️ Projeto ${projeto?.nome.substring(0,15)}: Bloqueio detectado no arranque. Antecipando ${semanasBloqueadasNoPeriodo} semanas.`);
+       inicioTardioAbs -= semanasBloqueadasNoPeriodo;
+    }
+
+    // 2.3 Validações Finais
     const dataObrigProj = (projeto?.anoInicioObrigatorio && projeto?.semanaInicioObrigatorio) 
       ? (projeto.anoInicioObrigatorio * 52 + projeto.semanaInicioObrigatorio) 
       : 0;
     
-    // IMPORTANTE: JIT calculado deve ter prioridade
-    const jitCalcOriginal = inicioTardioAbs;
     if (inicioTardioAbs < absHoje) {
-      // Se JIT calculado está no passado, limita para hoje
       console.log(`   ⚠️ JIT calculado (${inicioTardioAbs}) está no passado (hoje=${absHoje}), limitando para hoje`);
       inicioTardioAbs = absHoje;
     }
     
-    // Se há data obrigatória e ela é menor que o JIT calculado, loga aviso
     if (dataObrigProj > 0 && dataObrigProj < inicioTardioAbs) {
       console.log(`   ℹ️ Projeto tem data obrigatória (${dataObrigProj}) menor que JIT (${inicioTardioAbs}), JIT será usado`);
     } else if (dataObrigProj > 0 && dataObrigProj > inicioTardioAbs) {
@@ -811,8 +851,7 @@ export function generateAllocation(
     jitConstraints[pid] = inicioTardioAbs;
     
     const nomeProj = projeto?.nome || pid;
-    const jitCalc = terminoReal - duracaoEsforco - bufferSeguranca;
-    console.log(`   Proj: ${nomeProj.substring(0, 20)}... | Fim: ${terminoReal} | Esforço: ${duracaoEsforco} | Buffer: ${bufferSeguranca} | JIT Calc: ${jitCalc} | JIT Final: ${inicioTardioAbs} | Obrig: ${dataObrigProj || 'N/A'} | absHoje: ${absHoje}`);
+    console.log(`   Proj: ${nomeProj.substring(0, 20)}... | Fim: ${terminoReal} | Teórica: ${duracaoTeorica} | Antecipação: ${semanasBloqueadasNoPeriodo} | Buffer: ${bufferSeguranca} | JIT Final: ${inicioTardioAbs}`);
   }
 
   // 3. SIMULAÇÃO OTIMIZADA (JIT)
@@ -824,7 +863,8 @@ export function generateAllocation(
     semanaInicio,
     anoInicio,
     cfg,
-    jitConstraints // Com constraints JIT
+    blockMapGlobal, 
+    jitConstraints
   );
 
   return timelineOtimizada;
